@@ -54,7 +54,7 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
       setLoading(true);
       setError(null);
       setHasRemoteParticipant(false);
-      setIsAudioMuted(false);
+      setIsAudioMuted(true); // Start muted to prevent feedback
       try {
         const res = await fetch(`/api/meeting?role=${role}&meetingId=${encodeURIComponent(meetingId || 'demo-meeting')}`);
         const data = await res.json();
@@ -73,22 +73,39 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
           await session.audioVideo.chooseVideoInputDevice(videoInputs[0].deviceId);
         }
 
-        // Choose and start audio device
+        // Choose and start audio device with echo cancellation
         const audioInputs = await session.audioVideo.listAudioInputDevices();
         console.log('Available audio inputs:', audioInputs);
         if (audioInputs.length > 0) {
-          await session.audioVideo.chooseAudioInputDevice(audioInputs[0].deviceId);
-          console.log('Selected audio input:', audioInputs[0].deviceId);
+          // Find headset/headphone device first, fallback to default
+          const headsetDevice = audioInputs.find(device => 
+            device.label.toLowerCase().includes('headset') || 
+            device.label.toLowerCase().includes('headphone') ||
+            device.label.toLowerCase().includes('bluetooth')
+          );
+          const selectedDevice = headsetDevice || audioInputs[0];
+          
+          // Use device ID directly - Chime SDK will handle constraints internally
+          await session.audioVideo.chooseAudioInputDevice(selectedDevice.deviceId);
+          console.log('Selected audio input with echo cancellation:', selectedDevice.deviceId);
         } else {
           console.warn('No audio input devices found');
         }
 
-        // Choose audio output device (speakers)
+        // Choose audio output device (prefer headphones over speakers)
         const audioOutputs = await session.audioVideo.listAudioOutputDevices();
         console.log('Available audio outputs:', audioOutputs);
         if (audioOutputs.length > 0) {
-          await session.audioVideo.chooseAudioOutputDevice(audioOutputs[0].deviceId);
-          console.log('Selected audio output:', audioOutputs[0].deviceId);
+          // Find headset/headphone device first to prevent feedback
+          const headsetOutput = audioOutputs.find(device => 
+            device.label.toLowerCase().includes('headset') || 
+            device.label.toLowerCase().includes('headphone') ||
+            device.label.toLowerCase().includes('bluetooth')
+          );
+          const selectedOutput = headsetOutput || audioOutputs[0];
+          
+          await session.audioVideo.chooseAudioOutputDevice(selectedOutput.deviceId);
+          console.log('Selected audio output:', selectedOutput.deviceId);
         }
 
         // Start the meeting session
@@ -99,6 +116,9 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
           await session.audioVideo.bindAudioElement(audioRef.current);
           console.log('Audio element bound');
         }
+
+        // Mute local audio playback to prevent feedback
+        session.audioVideo.realtimeMuteLocalAudio();
 
         // Add observer for video tiles and audio state
         session.audioVideo.addObserver({
@@ -114,14 +134,14 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
             // Remote video
             if (!tile.localTile && (tile.boundExternalUserId!==null && (role==='customer'? tile.boundExternalUserId.includes('agent') : tile.boundExternalUserId.includes('customer')))  && remoteVideoRef.current) {
               session!.audioVideo.bindVideoElement(tile.tileId, remoteVideoRef.current);
-              setHasRemoteParticipant(true);
+              setHasRemoteParticipant(prev => !prev ? true : prev);
             }
           },
           videoTileWasRemoved: (tileId: number) => {
             // Check if this was a remote tile
             const remoteTiles = session!.audioVideo.getAllRemoteVideoTiles();
             if (remoteTiles.length === 0) {
-              setHasRemoteParticipant(false);
+              setHasRemoteParticipant(prev => prev ? false : prev);
               // Clear the remote video element
               if (remoteVideoRef.current) {
                 remoteVideoRef.current.srcObject = null;
@@ -133,7 +153,7 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
         // Subscribe to mute/unmute events to keep state in sync
         session.audioVideo.realtimeSubscribeToMuteAndUnmuteLocalAudio((muted: boolean) => {
           console.log('Mute state changed:', muted);
-          setIsAudioMuted(muted);
+          setIsAudioMuted(prev => prev !== muted ? muted : prev);
         });
 
         // Wait a bit for the session to fully establish before starting local video
@@ -142,7 +162,7 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
             session.audioVideo.startLocalVideoTile();
             console.log('Local video tile started');
             
-            // Check initial mute state
+            // Check initial mute state (should be true since we muted on start)
             const initialMuteState = session.audioVideo.realtimeIsLocalAudioMuted();
             console.log('Initial mute state:', initialMuteState);
             setIsAudioMuted(initialMuteState);
@@ -156,11 +176,13 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
     }
     startMeeting();
     return () => {
-      session?.audioVideo.stop();
+      if (session) {
+        session.audioVideo.stopLocalVideoTile();
+        session.audioVideo.stop();
+      }
       setHasRemoteParticipant(false);
       setIsAudioMuted(false);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, meetingId]);
 
   if (loading) return <div>Loading meeting...</div>;
