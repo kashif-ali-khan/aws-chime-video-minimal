@@ -1,36 +1,86 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AWS Chime Video Call Frontend
 
-## Getting Started
+A Next.js React frontend for AWS Chime video calling functionality.
 
-First, run the development server:
+## Architecture
 
+This frontend connects to a separate Node.js backend server that handles AWS Chime SDK operations.
+
+## Setup
+
+1. Install dependencies:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Copy environment variables:
+```bash
+cp .env.local.example .env.local
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Configure the backend URL in `.env.local`:
+```
+NEXT_PUBLIC_BACKEND_URL=http://localhost:3001
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Make sure the backend server is running on port 3001.
 
-## Learn More
+## Running the Frontend
 
-To learn more about Next.js, take a look at the following resources:
+### Development
+```bash
+npm run dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Production
+```bash
+npm run build
+npm start
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The frontend will start on port 3000 by default.
 
-## Deploy on Vercel
+## Project Structure
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+src/
+├── app/
+│   ├── components/
+│   │   └── ChimeMeeting.tsx    # Main meeting component
+│   ├── customer/
+│   │   └── meeting/
+│   │       └── page.tsx        # Customer meeting page
+│   ├── agent/
+│   │   └── meeting/
+│   │       └── page.tsx        # Agent meeting page
+│   ├── layout.tsx              # App layout
+│   └── page.tsx                # Home page
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Environment Variables
+
+- `NEXT_PUBLIC_BACKEND_URL`: Backend API URL (default: http://localhost:3001)
+- `NODE_ENV`: Environment (development/production)
+
+## Usage
+
+1. Start the backend server first
+2. Start the frontend development server
+3. Navigate to:
+   - Customer: http://localhost:3000/customer/meeting
+   - Agent: http://localhost:3000/agent/meeting
+
+## Features
+
+- Real-time video calling with AWS Chime SDK
+- Separate customer and agent interfaces
+- Audio mute/unmute controls
+- Automatic headset detection and echo cancellation
+- Responsive design
+
+## Dependencies
+
+- **amazon-chime-sdk-js**: Client-side Chime SDK for video/audio
+- **next**: React framework
+- **react**: UI library
+- **react-dom**: React DOM rendering
