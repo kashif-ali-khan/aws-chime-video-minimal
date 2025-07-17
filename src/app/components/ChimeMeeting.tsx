@@ -12,9 +12,41 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
   const [meetingSession, setMeetingSession] = useState<DefaultMeetingSession | null>(null);
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasRemoteParticipant, setHasRemoteParticipant] = useState(false);
+  const [isAudioMuted, setIsAudioMuted] = useState(false);
+
+  const toggleAudioMute = () => {
+    if (!meetingSession) {
+      console.log('Meeting session not ready');
+      return;
+    }
+    
+    console.log('Toggle audio mute clicked. Current state:', isAudioMuted);
+    console.log('Can unmute:', meetingSession.audioVideo.realtimeCanUnmuteLocalAudio());
+    console.log('Is muted:', meetingSession.audioVideo.realtimeIsLocalAudioMuted());
+    
+    try {
+      if (isAudioMuted) {
+        const success = meetingSession.audioVideo.realtimeUnmuteLocalAudio();
+        console.log('Unmute result:', success);
+        if (success) {
+          setIsAudioMuted(false);
+          console.log('Audio unmuted successfully');
+        } else {
+          console.log('Failed to unmute audio');
+        }
+      } else {
+        meetingSession.audioVideo.realtimeMuteLocalAudio();
+        setIsAudioMuted(true);
+        console.log('Audio muted successfully');
+      }
+    } catch (error) {
+      console.error('Error toggling audio mute:', error);
+    }
+  };
 
   useEffect(() => {
     let session: DefaultMeetingSession | null = null;
@@ -22,6 +54,7 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
       setLoading(true);
       setError(null);
       setHasRemoteParticipant(false);
+      setIsAudioMuted(false);
       try {
         const res = await fetch(`/api/meeting?role=${role}&meetingId=${encodeURIComponent(meetingId || 'demo-meeting')}`);
         const data = await res.json();
@@ -40,13 +73,37 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
           await session.audioVideo.chooseVideoInputDevice(videoInputs[0].deviceId);
         }
 
+        // Choose and start audio device
+        const audioInputs = await session.audioVideo.listAudioInputDevices();
+        console.log('Available audio inputs:', audioInputs);
+        if (audioInputs.length > 0) {
+          await session.audioVideo.chooseAudioInputDevice(audioInputs[0].deviceId);
+          console.log('Selected audio input:', audioInputs[0].deviceId);
+        } else {
+          console.warn('No audio input devices found');
+        }
+
+        // Choose audio output device (speakers)
+        const audioOutputs = await session.audioVideo.listAudioOutputDevices();
+        console.log('Available audio outputs:', audioOutputs);
+        if (audioOutputs.length > 0) {
+          await session.audioVideo.chooseAudioOutputDevice(audioOutputs[0].deviceId);
+          console.log('Selected audio output:', audioOutputs[0].deviceId);
+        }
+
         // Start the meeting session
         session.audioVideo.start();
 
-        // Add observer for video tiles
+        // Bind audio element for meeting audio
+        if (audioRef.current) {
+          await session.audioVideo.bindAudioElement(audioRef.current);
+          console.log('Audio element bound');
+        }
+
+        // Add observer for video tiles and audio state
         session.audioVideo.addObserver({
           videoTileDidUpdate: (tile: VideoTileState) => {
-           console.log(tile.localTile,'--tile.localTile--',role,'---role---KASHIF--videoTileDidUpdate', tile,'--boundExternalUserId',tile.boundExternalUserId);
+            //console.log(tile.localTile,'--tile.localTile--',role,'---role---KASHIF--videoTileDidUpdate', tile,'--boundExternalUserId',tile.boundExternalUserId);
             if (!tile.boundAttendeeId || tile.tileId == null) return;
             
             // Local video
@@ -73,10 +130,22 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
           }
         });
 
+        // Subscribe to mute/unmute events to keep state in sync
+        session.audioVideo.realtimeSubscribeToMuteAndUnmuteLocalAudio((muted: boolean) => {
+          console.log('Mute state changed:', muted);
+          setIsAudioMuted(muted);
+        });
+
         // Wait a bit for the session to fully establish before starting local video
         setTimeout(() => {
           if (session) {
             session.audioVideo.startLocalVideoTile();
+            console.log('Local video tile started');
+            
+            // Check initial mute state
+            const initialMuteState = session.audioVideo.realtimeIsLocalAudioMuted();
+            console.log('Initial mute state:', initialMuteState);
+            setIsAudioMuted(initialMuteState);
           }
         }, 1000);
       } catch (err: any) {
@@ -89,6 +158,7 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
     return () => {
       session?.audioVideo.stop();
       setHasRemoteParticipant(false);
+      setIsAudioMuted(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, meetingId]);
@@ -99,6 +169,36 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
   return (
     <div>
       <h2>{role === 'customer' ? 'Customer' : 'Agent'} Meeting</h2>
+      
+      {/* Hidden audio element for meeting audio */}
+      <audio ref={audioRef} autoPlay />
+      
+      {/* Audio Controls */}
+      <div style={{ marginBottom: 20, padding: 10, background: '#f5f5f5', borderRadius: 5 }}>
+        <button 
+          onClick={toggleAudioMute}
+          style={{
+            padding: '10px 20px',
+            backgroundColor: isAudioMuted ? '#ff4444' : '#44aa44',
+            color: 'white',
+            border: 'none',
+            borderRadius: 5,
+            cursor: 'pointer',
+            fontSize: '16px'
+          }}
+        >
+          {isAudioMuted ? '🔇 Unmute' : '🔊 Mute'}
+        </button>
+        <span style={{ marginLeft: 10, color: isAudioMuted ? '#ff4444' : '#44aa44' }}>
+          Audio: {isAudioMuted ? 'Muted' : 'Unmuted'}
+        </span>
+        {meetingSession && (
+          <span style={{ marginLeft: 10, color: '#666' }}>
+            Can Unmute: {meetingSession.audioVideo.realtimeCanUnmuteLocalAudio() ? 'Yes' : 'No'}
+          </span>
+        )}
+      </div>
+
       <div style={{ display: 'flex', gap: '20px' }}>
         <div>
           <h3>Local Video ({role})</h3>
@@ -123,7 +223,7 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
           )}
         </div>
       </div>
-      {/* TODO: Add controls for mute, leave, device selection */}
+      {/* TODO: Add controls for leave, device selection */}
     </div>
   );
 } 
