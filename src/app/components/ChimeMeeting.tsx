@@ -23,6 +23,7 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
   const getTileInfo = (session: DefaultMeetingSession) => {
     const allTiles = session.audioVideo.getAllVideoTiles();
     const remoteTiles = session.audioVideo.getAllRemoteVideoTiles();
+    console.log('KASHIF--remoteTiles', remoteTiles);
     const localTile = session.audioVideo.getLocalVideoTile();
     
     const info = {
@@ -39,6 +40,8 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
 
   useEffect(() => {
     let session: DefaultMeetingSession | null = null;
+    let tileCheckInterval: NodeJS.Timeout | null = null;
+    
     async function startMeeting() {
       setLoading(true);
       setError(null);
@@ -72,6 +75,15 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
           videoTileDidUpdate: (tile: VideoTileState) => {
             if (!tile.boundAttendeeId || tile.tileId == null) return;
             
+            console.log('KASHIF--videoTileDidUpdate', {
+              tileId: tile.tileId,
+              localTile: tile.localTile,
+              isContent: tile.isContent,
+              boundAttendeeId: tile.boundAttendeeId,
+              active: tile.active,
+              paused: tile.paused
+            });
+            
             // Local video tile
             if (tile.localTile) {
               console.log('KASHIF--localTile', tile);
@@ -81,8 +93,8 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
               }
             }
             
-            // Remote video tile (non-local, non-content)
-            if (!tile.localTile && !tile.isContent) {
+            // Remote video tile (non-local, non-content, not paused)
+            if (!tile.localTile && !tile.isContent && !tile.paused) {
               console.log('KASHIF--remoteTile', tile);
               setRemoteTileId(tile.tileId);
               setHasRemoteParticipant(true);
@@ -97,6 +109,8 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
             }
           },
           videoTileWasRemoved: (tileId: number) => {
+            console.log('KASHIF--videoTileWasRemoved', tileId);
+            
             // Unbind the video element when tile is removed
             session!.audioVideo.unbindVideoElement(tileId);
             
@@ -121,6 +135,26 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
             session.audioVideo.startLocalVideoTile();
             // Get initial tile information
             getTileInfo(session);
+            
+            // Set up periodic tile state check
+            tileCheckInterval = setInterval(() => {
+              if (session) {
+                const remoteTiles = session.audioVideo.getAllRemoteVideoTiles();
+                console.log('KASHIF--periodic check remoteTiles', remoteTiles);
+                
+                // If we think we have a remote participant but no remote tiles exist
+                if (hasRemoteParticipant && remoteTiles.length === 0) {
+                  console.log('KASHIF--remote participant disconnected, updating state');
+                  setHasRemoteParticipant(false);
+                  setRemoteTileId(null);
+                  if (remoteVideoRef.current) {
+                    session.audioVideo.unbindVideoElement(remoteTileId!);
+                  }
+                }
+                
+                getTileInfo(session);
+              }
+            }, 5000); // Check every 5 seconds
           }
         }, 1000);
       } catch (err: any) {
@@ -132,6 +166,9 @@ export default function ChimeMeeting({ role, meetingId }: { role: 'customer' | '
     startMeeting();
     return () => {
       // Cleanup: unbind all video elements before stopping
+      if (tileCheckInterval) {
+        clearInterval(tileCheckInterval);
+      }
       if (session) {
         if (localTileId !== null) {
           session.audioVideo.unbindVideoElement(localTileId);
