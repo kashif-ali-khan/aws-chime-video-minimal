@@ -13,7 +13,10 @@ class SocketHandler {
       sockjs_url: 'http://cdn.jsdelivr.net/sockjs/1.0.1/sockjs.min.js',
       log: function(severity, message) {
         console.log(`[${severity}] ${message}`);
-      }
+      },
+      heartbeat_delay: 25000,
+      disconnect_delay: 5000,
+      websocket: true
     };
 
     const sockjs_server = sockjs.createServer(sockjs_opts);

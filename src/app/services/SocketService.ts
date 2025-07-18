@@ -35,7 +35,9 @@ class SocketService {
   private connect() {
     try {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3001';
-      this.socket = new SockJS(`${backendUrl}/socket`);
+      this.socket = new SockJS(`${backendUrl}/socket`, null, {
+        transports: ['websocket', 'xhr-streaming', 'xhr-polling']
+      });
       
       this.socket.onopen = () => {
         console.log('Socket connected');
