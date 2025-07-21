@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { FaPlus } from "react-icons/fa";
+import Image from 'next/image';
 
 interface CustomerData {
   name: string;
@@ -13,10 +14,17 @@ interface CustomerData {
 
 interface SidebarProps {
   customerData: CustomerData;
+  onOpenPreview: (imageType: string, imageSrc: string) => void;
+  onDeleteImage: (imageType: string) => void;
+  customerImages?: {
+    face_captured?: string;
+    id_captured?: string;
+  };
 }
 
-const Sidebar: React.FC<SidebarProps> = ({customerData}) => {
+const Sidebar: React.FC<SidebarProps> = ({customerData, customerImages,onOpenPreview, onDeleteImage }) => {
     const [waitingCalls] = useState(10);
+    console.log("customerImages=-----------------", customerImages);
 
   return (
    <div className="bg-[#f3f4f6] p-4 min-h-screen flex justify-center items-start">
@@ -85,22 +93,56 @@ const Sidebar: React.FC<SidebarProps> = ({customerData}) => {
                 </div>
             </div>
 
+            {/* Picture */}
+            <div>
+                <div className="text-[#12345D] font-semibold text-base mb-2">Customer Picture</div>
+                <div className="h-28 bg-white border rounded-lg flex items-center justify-center overflow-hidden relative">
+                    {customerImages?.face_captured ? (
+                        <>
+                            <Image 
+                                src={customerImages.face_captured} 
+                                alt="Customer Picture"
+                                width={300}
+                                height={200}
+                                className="w-full h-full object-cover rounded-lg"
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center bg-[#26252587] bg-opacity-50 opacity-0 hover:opacity-100 transition-opacity">
+                                <button onClick={() => customerImages?.face_captured && onOpenPreview('face_captured', customerImages.face_captured)} className="bg-[#F9E8EF] text-[#9D174D] font-medium px-4 py-2 rounded-full">
+                                    Preview
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <FaPlus className="text-gray-600" />
+                    )}
+                </div>
+            </div>
 
             {/* ID Card */}
             <div>
                 <div className="text-[#12345D] font-semibold text-base mb-2">Customer ID Card</div>
-                <div className="h-28 bg-white border rounded-lg flex items-center justify-center">
-                <FaPlus className="text-gray-600" />
+                <div className="h-28 bg-white border rounded-lg flex items-center justify-center overflow-hidden relative">
+                    {customerImages?.id_captured ? (
+                        <>
+                            <Image 
+                                src={customerImages.id_captured} 
+                                alt="Customer ID Card"
+                                width={300}
+                                height={200}
+                                className="w-full h-full object-cover rounded-lg"
+                                />
+                            <div className="absolute inset-0 flex items-center justify-center bg-[#26252587] bg-opacity-50 opacity-0 hover:opacity-100 transition-opacity">
+                                <button  onClick={() => customerImages?.id_captured && onOpenPreview('id_captured', customerImages.id_captured)} className="bg-[#F9E8EF] text-[#9D174D] font-medium px-4 py-2 rounded-full">
+                                    Preview
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <FaPlus className="text-gray-600" />
+                    )}
                 </div>
             </div>
 
-            {/* Picture */}
-            <div>
-                <div className="text-[#12345D] font-semibold text-base mb-2">Customer Picture</div>
-                <div className="h-28 bg-white border rounded-lg flex items-center justify-center">
-                <FaPlus className="text-gray-600" />
-                </div>
-            </div>
         </div>
       </div>
     </div>

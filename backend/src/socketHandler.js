@@ -76,6 +76,23 @@ class SocketHandler {
       case 'customer_joined':
         this.handleCustomerJoined(connectionId, event.data);
         break;
+      case 'photo_ready':
+      case 'photo_capture':
+      case 'id_ready':
+      case 'id_capture':
+      case 'face_captured_chunk':
+      case 'id_captured_chunk':
+        this.handleCaptureMessage(connectionId, event);
+        break;
+      case 'question_started':
+      case 'questions_list':
+      case 'question':
+      case 'submit_response':
+      case 'change_language':
+      case 'questionnaire_completed':
+      case 'customer_agreed':
+        this.handleQuestionnaireMessage(connectionId, event);
+        break;
       default:
         console.log(`Unknown event type: ${event.type}`);
     }
@@ -207,6 +224,92 @@ class SocketHandler {
         }
         break;
       }
+    }
+  }
+
+  handleCaptureMessage(connectionId, event) {
+    console.log(`Capture message: ${event.type} from ${connectionId}`);
+    
+    const connection = this.connections.get(connectionId);
+    if (!connection) return;
+
+    // Determine the target based on the message type and sender
+    let targetConnectionId = null;
+    
+    // If this is a capture trigger (photo_ready, photo_capture, id_ready, id_capture), 
+    // it comes from agent and should go to customer
+    if (['photo_ready', 'photo_capture', 'id_ready', 'id_capture'].includes(event.type)) {
+      // Find customer in the same call
+      for (const [callId, call] of this.activeCalls.entries()) {
+        if (call.agentConnectionId === connectionId) {
+          targetConnectionId = call.customerConnectionId;
+          break;
+        }
+      }
+    }
+    // If this is a capture chunk (face_captured_chunk, id_captured_chunk),
+    // it comes from customer and should go to agent
+    else if (['face_captured_chunk', 'id_captured_chunk'].includes(event.type)) {
+      // Find agent in the same call
+      for (const [callId, call] of this.activeCalls.entries()) {
+        if (call.customerConnectionId === connectionId) {
+          targetConnectionId = call.agentConnectionId;
+          break;
+        }
+      }
+    }
+
+    // Forward the message to the target
+    if (targetConnectionId) {
+      const targetConnection = this.connections.get(targetConnectionId);
+      if (targetConnection) {
+        targetConnection.conn.write(JSON.stringify(event));
+        console.log(`Forwarded ${event.type} to ${targetConnectionId}`);
+      }
+    } else {
+      console.log(`No target found for ${event.type} from ${connectionId}`);
+    }
+  }
+
+  handleQuestionnaireMessage(connectionId, event) {
+    console.log(`Questionnaire message: ${event.type} from ${connectionId}`);
+    
+    const connection = this.connections.get(connectionId);
+    if (!connection) return;
+
+    let targetConnectionId = null;
+    let targetType = '';
+    
+    // Determine message direction based on event type
+    if (event.type === 'customer_agreed') {
+      // customer_agreed goes from customer to agent
+      for (const [callId, call] of this.activeCalls.entries()) {
+        if (call.customerConnectionId === connectionId) {
+          targetConnectionId = call.agentConnectionId;
+          targetType = 'agent';
+          break;
+        }
+      }
+    } else {
+      // All other questionnaire messages go from agent to customer
+      for (const [callId, call] of this.activeCalls.entries()) {
+        if (call.agentConnectionId === connectionId) {
+          targetConnectionId = call.customerConnectionId;
+          targetType = 'customer';
+          break;
+        }
+      }
+    }
+
+    // Forward the message to the target
+    if (targetConnectionId) {
+      const targetConnection = this.connections.get(targetConnectionId);
+      if (targetConnection) {
+        targetConnection.conn.write(JSON.stringify(event));
+        console.log(`Forwarded questionnaire ${event.type} to ${targetType} ${targetConnectionId}`);
+      }
+    } else {
+      console.log(`No ${targetType || 'target'} found for questionnaire ${event.type} from ${connectionId}`);
     }
   }
 

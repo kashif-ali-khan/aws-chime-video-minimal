@@ -1,4 +1,5 @@
 import SockJS from 'sockjs-client';
+import { QuestionnairePayload } from '../data/questionnaire';
 
 export interface CallRequest {
   id: string;
@@ -14,9 +15,27 @@ export interface CallResponse {
   meetingId: string;
 }
 
+export interface CaptureMessage {
+  type: 'photo_ready' | 'photo_capture' | 'id_ready' | 'id_capture' | 'face_captured_chunk' | 'id_captured_chunk';
+  to: string;
+  payload?: {
+    imageId?: string;
+    chunkIndex?: number;
+    totalChunks?: number;
+    imageChunk?: string;
+    prefix?: string;
+  };
+}
+
+export interface QuestionnaireMessage {
+  type: 'question_started' | 'questions_list' | 'question' | 'submit_response' | 'change_language' | 'questionnaire_completed' | 'customer_agreed';
+  to?: string;
+  payload?: QuestionnairePayload;
+}
+
 export interface CallEvent {
-  type: 'call_request' | 'call_response' | 'call_ended' | 'agent_joined' | 'customer_joined';
-  data: CallRequest | CallResponse | { callId: string; meetingId: string } | { meetingId: string; agentId: string } | { meetingId: string; customerId: string };
+  type: 'call_request' | 'call_response' | 'call_ended' | 'agent_joined' | 'customer_joined' | 'photo_ready' | 'photo_capture' | 'id_ready' | 'id_capture' | 'face_captured_chunk' | 'id_captured_chunk' | 'question_started' | 'questions_list' | 'question' | 'submit_response' | 'change_language' | 'questionnaire_completed' | 'customer_agreed';
+  data: CallRequest | CallResponse | { callId: string; meetingId: string } | { meetingId: string; agentId: string } | { meetingId: string; customerId: string } | CaptureMessage | QuestionnaireMessage;
 }
 
 type CallEventListener = (data: CallEvent['data']) => void;
@@ -178,6 +197,42 @@ class SocketService {
   // Get connection status
   isConnected(): boolean {
     return this.socket !== null && this.socket.readyState === WebSocket.OPEN;
+  }
+
+  // Send capture message
+  sendMessage(messageType: CaptureMessage['type'], to: string, payload?: CaptureMessage['payload']) {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      const captureMessage: CaptureMessage = {
+        type: messageType,
+        to,
+        payload
+      };
+
+      const event: CallEvent = {
+        type: messageType,
+        data: captureMessage
+      };
+
+      this.socket.send(JSON.stringify(event));
+    }
+  }
+
+  // Send questionnaire message
+  sendQuestionnaireMessage(messageType: QuestionnaireMessage['type'], payload?: QuestionnairePayload, to?: string) {
+    if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+      const questionnaireMessage: QuestionnaireMessage = {
+        type: messageType,
+        to,
+        payload
+      };
+
+      const event: CallEvent = {
+        type: messageType,
+        data: questionnaireMessage
+      };
+
+      this.socket.send(JSON.stringify(event));
+    }
   }
 
   // Close connection

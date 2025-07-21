@@ -4,6 +4,7 @@ import Image from "next/image";
 import placeholderImage from "../../people-communicating-through-video-call.png";
 import { CallRequest } from '../../services/SocketService';
 import { VideoCallState, VideoCallControls } from '../../hooks/useVideoCall';
+import { CaptureType, getCaptureConfig, getGeneralConfig } from '../../config/captureConfig';
 
 interface VideoCallScreenProps {
   currentCall: CallRequest | null;
@@ -12,6 +13,15 @@ interface VideoCallScreenProps {
   onAcceptCall: () => void;
   onEndCall: () => void;
   incomingCall: CallRequest | null;
+  customerImages: {
+    face_captured?: string;
+    id_captured?: string;
+  };
+  onTriggerFaceCapture: () => void;
+  onTriggerIDCapture: () => void;
+  showOverlay: boolean;
+  captureType: CaptureType | null;
+  countdown: number;
 }
 
 const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
@@ -20,7 +30,12 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
   videoControls,
   onAcceptCall,
   onEndCall,
-  incomingCall
+  incomingCall,
+  onTriggerFaceCapture,
+  onTriggerIDCapture,
+  showOverlay,
+  captureType,
+  countdown
 }) => {
     return (
         <div className="flex flex-col items-center p-4 bg-[#f3f4f6]">
@@ -79,6 +94,58 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
                         </div>
                     )}
 
+                    {/* Capture Status Overlay */}
+                    {showOverlay && (() => {
+                        const config = getCaptureConfig(captureType!);
+                        const generalConfig = getGeneralConfig();
+                        
+                        return (
+                            <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10 }}>
+                                {/* Dark overlay outside capture area */}
+                                <div style={{
+                                    position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                                    backgroundColor: `rgba(0, 0, 0, ${generalConfig.backgroundOpacity})`
+                                }} />
+                                
+                                {/* Capture area - Circle for face, Rectangle for ID */}
+                                <div style={{
+                                    position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+                                    width: config.overlayWidth,
+                                    height: config.overlayHeight,
+                                    border: `${config.borderStyle} ${config.borderColor}`,
+                                    borderRadius: config.borderRadius,
+                                    backgroundColor: 'transparent',
+                                    boxShadow: `0 0 0 9999px rgba(0, 0, 0, ${generalConfig.backgroundOpacity})`
+                                }} />
+                                
+                                {/* Instructions */}
+                                <div style={{
+                                    position: 'absolute', bottom: '20%', left: '50%', transform: 'translateX(-50%)',
+                                    color: 'white', fontSize: '18px', fontWeight: 'bold', textAlign: 'center',
+                                    background: 'rgba(0, 0, 0, 0.7)', padding: '12px 24px', borderRadius: '8px'
+                                }}>
+                                    {config.instruction}
+                                </div>
+                                
+                                {/* Countdown Display */}
+                                {countdown > 0 && (
+                                    <div style={{ 
+                                        position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', 
+                                        zIndex: 20, backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                    }}>
+                                        <div style={{
+                                            color: 'white', fontSize: '72px', fontWeight: 'bold',
+                                            animation: 'pulse 1s infinite'
+                                        }}>
+                                            {countdown}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
+
                     {/* Controls */}
                     {videoState.isConnected && <div className="absolute bottom-[11px] bg-[#F4F6FA] flex gap-4 mt-3 p-2 rounded-lg shadow">
                         <button 
@@ -89,10 +156,18 @@ const VideoCallScreen: React.FC<VideoCallScreenProps> = ({
                                 videoState.isAudioMuted ? <FaMicrophoneAltSlash /> : <FaMicrophone />
                             }
                         </button>
-                        <button className="p-2 rounded text-[#424752]">
+                        <button 
+                            onClick={onTriggerFaceCapture}
+                            className="p-2 rounded text-[#424752] hover:bg-gray-200 transition-colors"
+                            title="Capture Face Photo"
+                        >
                             <FaCamera />
                         </button>
-                        <button className="p-2 rounded text-[#424752]">
+                        <button 
+                            onClick={onTriggerIDCapture}
+                            className="p-2 rounded text-[#424752] hover:bg-gray-200 transition-colors"
+                            title="Capture ID Card"
+                        >
                             <FaExpand />
                         </button>
                         <button className="p-2 rounded text-[#424752]">
